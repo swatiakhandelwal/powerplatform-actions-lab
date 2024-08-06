@@ -1,0 +1,143 @@
+name: release-solution-to-test
+# prepare for releasing to test:
+#   convert solution to managed (using a build PowerPlatform environment for the conversion)
+#   upload the solution to the GitHub artifacts and deploy to the TEST environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      # Change this value
+      solution_name:
+        description: 'name of the solution'
+        required: true
+        default: DemoAppTask
+       #Do Not change these values
+      solution_exported_folder:
+        description: 'folder name for staging the exported solution *do not change*'
+        required: true
+        default: /out
+      solution_folder:
+        description: 'staging the unpacked solution folder before check-in *do not change*'
+        required: true
+        default: /Solutions
+      solution_target_folder: 
+       description: 'folder name to be created and checked in *do not change*'
+       required: true
+       default: Solution
+  release:
+    types: [created]
+
+env:
+  ENVIRONMENT_URL: 'https://testorgca11a9f7.crm.dynamics.com/'
+  CLIENT_ID: env.clientid
+  TENANT_ID: env.tenantid
+  ConsumerComplaintSystem.SOLUTION_VERSION: 1.0.0.0
+
+permissions:
+  contents: write
+jobs:
+  convert-to-managed:
+    runs-on: windows-latest 
+    env:
+      RUNNER_DEBUG: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        lfs: true
+
+    - name: who-am-i 
+      uses: microsoft/powerplatform-actions/who-am-i@v0
+      with:
+        environment-url: ${{env.ENVIRONMENT_URL}}
+        app-id: ${{env.CLIENT_ID}}
+        client-secret: ${{ secrets.D365SECRET }}
+        tenant-id: ${{env.TENANT_ID}}
+
+    - name: Run PowerShell script
+      shell: pwsh
+      run: |
+        Install-Module -Name Microsoft.Xrm.Data.PowerShell -Confirm:$false -Verbose -Force
+        $conn = Get-CrmConnection -ConnectionString "AuthType=ClientSecret; Url=${{ env.ENVIRONMENT_URL }}; ClientId=${{ env.CLIENT_ID }}; ClientSecret=${{ secrets.D365SECRET }}"
+        $version = "$([System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId((Get-Date), '${{ env.timeZone }}').ToString("yyyy.MM.dd")).${{ github.run_number }}";
+        echo "::set-output name=solutionVersion::$version"          
+        Set-CrmSolutionVersionNumber -SolutionName ${{ github.event.inputs.solution_name }} -VersionNumber $version
+        
+        
+  #   - name: Export solution as managed
+  #     uses: microsoft/powerplatform-actions/export-solution@v0
+  #     with:
+  #       environment-url: ${{env.ENVIRONMENT_URL}}
+  #       app-id: ${{env.CLIENT_ID}}
+  #       client-secret: ${{ secrets.D365SECRET }}
+  #       tenant-id: ${{env.TENANT_ID}}
+  #       solution-name: ${{ github.event.inputs.solution_name }}
+  #       managed: true
+  #       solution-output-file: out/ship/${{ github.event.inputs.solution_name }}.zip
+
+  #   - name: Upload the ready to ship solution to GH artifact store
+  #     uses: actions/upload-artifact@v2
+  #     with:
+  #       name: managedSolutions
+  #       path: out/ship/${{ github.event.inputs.solution_name }}.zip
+
+  # release-to-staging:
+  #   needs: [ convert-to-managed ]
+  #   runs-on: windows-latest
+  #   environment: 
+  #     name: TestEnv
+  #   env:
+  #     RUNNER_DEBUG: 1
+
+  #   steps:
+  #   - uses: actions/checkout@v2
+  #     with:
+  #       lfs: true
+
+  #   - name: Fetch the ready to ship solution from GH artifact store
+  #     uses: actions/download-artifact@v2
+  #     with:
+  #       name: managedSolutions
+  #       path: out/release/
+        
+  #   - name: Import solution to test env
+  #     uses: microsoft/powerplatform-actions/import-solution@v0
+  #     with:
+  #       environment-url: 'https://orgtest.crm.dynamics.com/'
+  #       app-id: ${{env.CLIENT_ID}}
+  #       client-secret: ${{ secrets.D365SECRET }}
+  #       tenant-id: ${{env.TENANT_ID}}
+  #       solution-file: out/release/${{ github.event.inputs.solution_name }}.zip
+  #       force-overwrite: true
+  #       publish-changes: true
+  #       import-as-holding: true
+        
+  #   - name: Upgrade solution to test env
+  #     uses: microsoft/powerplatform-actions/upgrade-solution@v0
+  #     with:
+  #       environment-url: 'https://orgcd66acce.crm.dynamics.com/'
+  #       app-id: ${{env.CLIENT_ID}}
+  #       client-secret: ${{ secrets.D365SECRET }}
+  #       tenant-id: ${{env.TENANT_ID}}
+  #       solution-name: ${{ github.event.inputs.solution_name }}
+  #       async: true
+  #       max-async-wait-time: 120
+
+
+
+- name: Copy Solution Files
+      run: |
+        # Your command to copy the exported solution files
+        # Example:
+        # cp <source_path> <destination_path>
+        echo "Copying solution files..."
+
+    - name: Publish Artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: exported-solution
+        path: <path_to_exported_solution_files>
+        
+        
+        
+        #my pwesonal token : github personal token
